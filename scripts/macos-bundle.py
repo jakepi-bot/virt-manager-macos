@@ -81,16 +81,23 @@ def _has_stdlib(p):
 
 
 # Locate the python home.  Homebrew python is a framework build
-# (Frameworks/Python.framework/Versions/X.Y/...); we preserve that layout
-# inside the bundle so the interpreter relocates cleanly.  Plain layout is a
-# fallback.
-fw_ver = join(PYOPT, "Frameworks", "Python.framework", "Versions", PYVER)
+# (Frameworks/Python.framework/Versions/X.Y/...); we preserve the framework
+# layout inside the bundle (including root-level symlinks such as
+# Versions/Current) so the interpreter relocates cleanly.
+_fw_root_src = join(PYOPT, "Frameworks", "Python.framework")
+fw_ver = join(_fw_root_src, "Versions", PYVER)
 if _has_stdlib(join(fw_ver, "lib", "python" + PYVER)):
-    PYFRAMEWORK_SRC = fw_ver
-    PYEXEC_REL = join("python", "Frameworks", "Python.framework", "Versions",
-                      PYVER, "bin", "python" + PYVER)
-    STDLIB_DST = join(PYRES, "Frameworks", "Python.framework", "Versions",
-                      PYVER, "lib", "python" + PYVER)
+    PYFRAMEWORK_SRC = _fw_root_src
+    PYFWDST = join(PYRES, "Frameworks", "Python.framework")
+    PYFWV = join(PYFWDST, "Versions", PYVER)
+    if exists(join(fw_ver, "Resources", "Python.app", "Contents", "MacOS", "Python")):
+        # Exec the real interpreter.  The bin/pythonX.Y stub re-execs via
+        # Python.app and mis-resolves that path inside a foreign .app bundle.
+        PYEXEC_REL = relpath(join(PYFWV, "Resources", "Python.app",
+                                  "Contents", "MacOS", "Python"), RES)
+    else:
+        PYEXEC_REL = relpath(join(PYFWV, "bin", "python" + PYVER), RES)
+    STDLIB_DST = join(PYFWV, "lib", "python" + PYVER)
 else:
     PYFRAMEWORK_SRC = None
     PYEXEC_REL = join("python", "bin", "python" + PYVER)
@@ -144,9 +151,27 @@ def copyfile(src, dst, mode=None):
 
 # ------------------------------------------------------------------ 1. python
 if PYFRAMEWORK_SRC:
-    copytree(PYFRAMEWORK_SRC, join(PYRES, "Frameworks", "Python.framework",
-                                   "Versions", PYVER))
+    os.makedirs(join(PYRES, "Frameworks"), exist_ok=True)
+    shutil.copytree(PYFRAMEWORK_SRC, PYFWDST, symlinks=True, dirs_exist_ok=True,
+                    ignore=PRUNE)
+    make_writable(PYFWDST)
     log("python framework: %s" % PYFRAMEWORK_SRC)
+    # canonical locations inside an .app (harmless, aids other conventions)
+    compat = join(FW, "Python.framework")
+    if not exists(compat):
+        os.symlink(relpath(PYFWDST, FW), compat)
+    res_expected = join(FW, "Resources")
+    if not exists(res_expected):
+        os.symlink(relpath(join(PYFWV, "Resources"), FW), res_expected)
+    if not exists(PYEXEC):
+        log("python exec missing; framework Resources listing:")
+        rr = join(PYFWV, "Resources")
+        if exists(rr):
+            for x in sorted(os.listdir(rr))[:20]:
+                log("   Resources/%s" % x)
+        else:
+            log("   (no Resources dir in framework)")
+        raise SystemExit("python exec not found: %s" % PYEXEC)
 else:
     bin_src = realpath(join(PYOPT, "bin", "python" + PYVER))
     if not exists(bin_src):
