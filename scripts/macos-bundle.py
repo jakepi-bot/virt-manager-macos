@@ -245,7 +245,7 @@ log("buildconfig.py patched for relocatable prefix")
 # ------------------------------------------------------------- 3. resources
 gir_dst = join(RES, "girepository")
 gir_src = join(BREW, "lib", "girepository-1.0")
-TYPELIB_ALLOW = [
+TYPELIB_SEEDS = [
     "GLib-2.0", "GObject-2.0", "Gio-2.0", "GModule-2.0",
     "GLibUnix-2.0", "GioUnix-2.0",
     "Gdk-3.0", "Gtk-3.0", "GdkPixbuf-2.0",
@@ -253,12 +253,44 @@ TYPELIB_ALLOW = [
     "freetype2-2.0", "cairo-1.0", "Atk-1.0",
     "GtkSource-4", "Vte-2.91", "GtkVnc-2.0", "GVnc-1.0", "GVncExt-1.0",
     "SpiceClientGtk-3.0", "SpiceClientGLib-2.0",
+    "Gst-1.0", "GstBase-1.0", "GstAudio-1.0", "GstVideo-1.0",
     "Libosinfo-1.0", "libxml2-2.0", "LibvirtGLib-1.0",
     "xlib-2.0", "GL-1.0", "Json-1.0",
 ]
+
+
+def _gir_closure(seeds):
+    """Expand the typelib set with every namespace the seeds <include>.
+
+    Namespaces pull each other in (SpiceClientGtk -> Gst -> GstBase,
+    GtkVnc -> GVnc, Libosinfo -> libxml2).  A curated list alone misses
+    those and the app then dies at import time inside the bundle.
+    """
+    gir = join(BREW, "share", "gir-1.0")
+    seen, order, queue, nogir = set(), [], list(seeds), set()
+    while queue:
+        name = queue.pop(0)
+        if name in seen:
+            continue
+        seen.add(name)
+        order.append(name)
+        gpath = join(gir, name + ".gir")
+        if not exists(gpath):
+            nogir.add(name)
+            continue
+        with open(gpath, encoding="utf-8", errors="ignore") as gf:
+            for dn, dv in re.findall(
+                    r'<include name="([^"]+)" version="([^"]+)"', gf.read()):
+                queue.append("%s-%s" % (dn, dv))
+    if nogir:
+        log("note: no .gir for %s" % ", ".join(sorted(nogir)))
+    return order
+
+
+_TYPELIBS = _gir_closure(TYPELIB_SEEDS)
 os.makedirs(gir_dst, exist_ok=True)
 NEEDED_DYLIBS = set()
-for t in TYPELIB_ALLOW:
+for t in _TYPELIBS:
     src_t = join(gir_src, t + ".typelib")
     if not exists(src_t):
         log("WARNING: typelib not found: %s" % src_t)
@@ -267,8 +299,8 @@ for t in TYPELIB_ALLOW:
     data = open(src_t, "rb").read()
     for m in re.finditer(rb"lib[A-Za-z0-9+_.\-]*\.dylib", data):
         NEEDED_DYLIBS.add(m.group().decode())
-log("typelibs: %d copied, %d library names referenced"
-    % (len(os.listdir(gir_dst)), len(NEEDED_DYLIBS)))
+log("typelibs: %d copied from %d namespaces, %d library names referenced"
+    % (len(os.listdir(gir_dst)), len(_TYPELIBS), len(NEEDED_DYLIBS)))
 
 sch_dst = join(VMROOT, "share", "glib-2.0", "schemas")
 copytree(join(BREW, "share", "glib-2.0", "schemas"), sch_dst,
