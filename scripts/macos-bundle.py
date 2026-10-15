@@ -229,13 +229,18 @@ for p in glob.glob(join(SP, "*.pth")):
 
 # ------------------------------------------------------- 2. virt-manager tree
 copytree(join(VM, "share", "virt-manager"), join(VMROOT, "share", "virt-manager"))
-bc = join(VMROOT, "share", "virt-manager", "virtinst", "build.cfg")
-if exists(bc):
-    txt = open(bc).read()
-    txt2 = re.sub(r"(?m)^prefix=.*$", "prefix=" + VMROOT, txt)
-    with open(bc, "w") as f:
-        f.write(txt2)
-    log("build.cfg rewrite: %r -> prefix=%s" % (txt.strip().replace("\n", " | ")[:160], VMROOT))
+# Make BuildConfig relocatable: the installed build.cfg bakes the Homebrew
+# prefix, so derive the prefix from this file's own location at runtime.
+bcpy = join(VMROOT, "share", "virt-manager", "virtinst", "buildconfig.py")
+txt = open(bcpy).read()
+old_line = 'self._set_paths_by_prefix(_get_param("prefix", "/usr"))'
+new_line = ('self._set_paths_by_prefix(os.path.abspath(os.path.join('
+            'os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")))'
+            '  # (macos bundle: relocatable prefix)')
+if old_line not in txt:
+    raise SystemExit("buildconfig.py: expected prefix line not found")
+open(bcpy, "w").write(txt.replace(old_line, new_line))
+log("buildconfig.py patched for relocatable prefix")
 
 # ------------------------------------------------------------- 3. resources
 gir_dst = join(RES, "girepository")
