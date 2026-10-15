@@ -180,9 +180,8 @@ jobs:
           sudo mv /opt/homebrew /opt/.hb_hidden
           trap 'sudo mv /opt/.hb_hidden /opt/homebrew 2>/dev/null || true' EXIT
           env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
-            DYLD_PRINT_LIBRARIES=1 \
             SMOKE_LOG="$GITHUB_WORKSPACE/bundle-smoke.log" \
-            bash scripts/smoke-test-macos.sh "$RUNNER_TEMP/relo/Virtual Machine Manager.app/Contents/MacOS/launcher --no-fork --debug --connect test:///default" 25
+            bash scripts/smoke-test-macos.sh "\"$RUNNER_TEMP/relo/Virtual Machine Manager.app/Contents/MacOS/launcher\" --no-fork --debug --connect test:///default" 25
           sudo mv /opt/.hb_hidden /opt/homebrew
           trap - EXIT
 

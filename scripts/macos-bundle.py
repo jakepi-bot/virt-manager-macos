@@ -322,6 +322,9 @@ problems = []
 
 def resolve(dep, fp, rpaths):
     """Return (kind, realpath) for a dependency reference."""
+    if dep.startswith(("/usr/lib", "/System", "/usr/local/lib")):
+        # System libraries live in the dyld shared cache; no file on disk.
+        return ("system", dep)
     cands = []
     if dep.startswith("/"):
         cands.append(dep)
@@ -344,6 +347,11 @@ def resolve(dep, fp, rpaths):
             if real.startswith(BUNDLE_ROOT + os.sep):
                 return ("bundle", real)
             return (classify(real), real)
+    # fallback: a relative or dangling reference whose real library exists
+    # elsewhere in Homebrew (e.g. @loader_path siblings like libicudata)
+    src = dylib_index.get(basename(dep))
+    if src:
+        return ("brew", realpath(src))
     return (None, None)
 
 
@@ -527,9 +535,9 @@ if png:
         r2 = run(["sips", "-z", str(s * 2), str(s * 2), png, "--out", join(tmp, "icon_%dx%d@2x.png" % (s, s))], check=False)
         ok = ok and r1.returncode == 0 and r2.returncode == 0
     r = run(["iconutil", "-c", "icns", tmp, "-o", join(RES, "virt-manager.icns")], check=False)
-    shutil.rmtree(tmp, ignore_errors=True)
     if r.returncode != 0:
-        log("WARNING: icon conversion failed")
+        log("WARNING: icon conversion failed: %s" % (r.stderr or "")[:300])
+    shutil.rmtree(tmp, ignore_errors=True)
 else:
     log("WARNING: no icon PNG found")
 
