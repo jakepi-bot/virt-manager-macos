@@ -104,15 +104,39 @@ for d in (APP, C, MACOS, RES, FW, SP, VMROOT):
 PRUNE = shutil.ignore_patterns("__pycache__", "*.pyc")
 
 
+def make_writable(tree):
+    """Brew ships some files read-only; make bundling + user edits safe."""
+    for root, dirs, files in os.walk(tree):
+        for d in dirs:
+            p = join(root, d)
+            try:
+                os.chmod(p, os.stat(p).st_mode | 0o200)
+            except OSError:
+                pass
+        for f in files:
+            p = join(root, f)
+            try:
+                os.chmod(p, os.stat(p).st_mode | 0o200)
+            except OSError:
+                pass
+
+
 def copytree(src, dst, ignore=None):
     shutil.copytree(src, dst, symlinks=False, dirs_exist_ok=True,
                     ignore=ignore or PRUNE)
+    make_writable(dst)
     log("copied tree %s -> %s" % (src, relpath(dst, APP)))
 
 
 def copyfile(src, dst, mode=None):
     os.makedirs(dirname(dst), exist_ok=True)
+    if exists(dst):
+        try:
+            os.chmod(dst, os.stat(dst).st_mode | 0o200)
+        except OSError:
+            pass
     shutil.copy2(realpath(src), dst)
+    os.chmod(dst, os.stat(dst).st_mode | 0o200)
     if mode is not None:
         os.chmod(dst, mode)
     return dst
@@ -151,8 +175,12 @@ pth = join(SP, "homebrew_deps.pth")
 if exists(pth):
     content = open(pth).read()
     log("homebrew_deps.pth:\n  " + content.replace("\n", "\n  "))
+    seen = set()
     for m in re.finditer(r"addsitedir\('([^']+)'\)", content):
         target = m.group(1).replace("@@HOMEBREW_PREFIX@@", BREW)
+        if target in seen:
+            continue
+        seen.add(target)
         if exists(target):
             copytree(target, SP)
     os.remove(pth)
