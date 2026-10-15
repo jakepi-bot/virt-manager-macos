@@ -21,17 +21,25 @@ proving the app needs nothing from Homebrew at runtime:
   `SMOKE_RESULT: rc=0 alive_target=25s`.
 - **`grep /opt/homebrew bundle-smoke.log` → 0 matches** (asserted as a
   failing step otherwise).
-- **Published:** [v1.0.1](https://github.com/jakepi-bot/virt-manager-macos/releases/tag/v1.0.1)
+- **Published:** [v1.0.2](https://github.com/jakepi-bot/virt-manager-macos/releases/tag/v1.0.2)
   — `virt-manager-macos-arm64.zip` + `SHA256SUMS.txt`; asset sha256
-  `8604274279cfdea81203372318e71790ff3e64f67b416581366a404f4e7a2f82`
+  `5322238b6cd3e4fbb1157cfbcc21a538c9be193d025683ac1d1df76e36528d5e`
   (verified by downloading the published asset and re-hashing it).
-- **CI also exercises, inside the bundle with Homebrew hidden:**
-  - `launcher --selfcheck` → `GTK 3.24.52` and every console binding:
-    GtkSource, Vte, GVnc, GtkVnc, SpiceClientGLib/Gtk, Libosinfo, libvirt
-  - `--show-domain-editor test` — the same code path as the manager's **Open**
-    button (VM window + console backends) → `SMOKE_RESULT: rc=0`
-  - the app icon: `virt-manager.icns` (313 KB) built by the bundler and
-    referenced from `CFBundleIconFile`
+- **Regression gates (Homebrew hidden, relaunched bundle):**
+  - `launcher --selfcheck` → `OSDB entries: 952` (the osinfo database loads:
+    `pci.ids`, `usb.ids` and the `osinfo-db` XML tree are bundled and
+    libosinfo's compile-time paths are retargeted at them),
+    plus every console binding (GVnc, GtkVnc, SpiceClientGLib/Gtk, Vte,
+    GtkSource) — **the step fails if any import fails**
+  - `--show-domain-editor test` — the exact code path of the **Open** button —
+    **fails CI unless the VM details window actually opens**
+    (`Showing VM details: <vmmDomain name=test …>`). Earlier gates only
+    checked the process stayed alive, which an error dialog satisfies.
+  - the app icon: `virt-manager.icns` (313 KB) built and referenced by
+    `CFBundleIconFile` (asserted by a CI step)
+  - `grep /opt/homebrew bundle-smoke.log` → **0 matches** (now meaningful:
+    the launcher tees output to both stdout and
+    `~/Library/Logs/virt-manager-macos.log`)
 
 ## Latest full run — 2026-10-15
 
@@ -90,7 +98,8 @@ proving the app needs nothing from Homebrew at runtime:
 | [#38761930377](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38761930377) | packaged ✅ both OSes; from-source exposed the real master regression: `AttributeError: module 'locale' has no attribute 'bindtextdomain'` — upstream commit `d13271422` (after v5.1.0) |
 | [#38762754031](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38762754031) | `patches/0001` applied; next blocker: `ModuleNotFoundError: No module named 'requests'` (virtinst imports it at load; the brew formula ships it in its venv) |
 | [#38763193718](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38763193718) | **all green** (4/4) |
-| [#38766160372 → #38771163311](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38771163311) | **self-contained bundle debugging** (11 iterations): brew framework python layout (per-version `Resources`, `python` stub re-exec → exec the real interpreter), read-only brew trees, `otool -L` self-id mishandling, typelib allowlist gaps (`libxml2-2.0`, `GLibUnix-2.0`), brew framework `site-packages` symlink, baked Homebrew prefix (fixed by patching `buildconfig.py` for a relocatable prefix), and a smoke-test quoting bug that silently skipped the app launch (spaced `Virtual Machine Manager.app` path) |
+| [#38766160372 → #38783656761](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38783656761) | **self-contained bundle debugging** (14+ iterations): brew framework python layout (per-version `Resources`, `python` stub re-exec → exec the real interpreter), read-only brew trees, `otool -L` self-id mishandling, typelib allowlist gaps → replaced with the GIR dependency closure (`libxml2-2.0`, `GVnc-1.0`, `Gst/GstBase-1.0`), brew framework `site-packages` symlink, baked Homebrew prefix (relocatable via a `buildconfig.py` patch), a smoke quoting bug that silently skipped the launch (spaced `Virtual Machine Manager.app` path), and libosinfo's compile-time data paths (`pci.ids`/`usb.ids`/db → bundled + retargeted strings) |
+| [#38795671875 → #38796648873](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38796648873) | **gates strengthened after two real-user bugs**: the smoke had asserted "process alive" (which an error dialog satisfies) and the launcher's new output redirect blinded CI to the app's output entirely. Now: the VM details window must actually open (asserted), `--selfcheck` must load the OS database and all console bindings, and the app's output is teed to stdout (CI sees it) and `~/Library/Logs/virt-manager-macos.log` (Finder launches keep it) |
 
 ## Known limitations (not covered by CI)
 
