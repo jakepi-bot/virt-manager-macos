@@ -621,15 +621,13 @@ cd "$RES"
 if [ "${1:-}" = "--selfcheck" ]; then
   exec "$RES/__PYEXEC__" "$RES/selfcheck.py"
 fi
-if [ -t 1 ]; then
-  exec "$RES/__PYEXEC__" "$RES/app.py" "$@"
-fi
-# launched from Finder/Dock: keep a log, otherwise errors vanish silently
+# Keep a log for every launch (Finder/Dock launches otherwise lose errors),
+# but tee so stdout/stderr stay visible to harnesses and Terminal runs.
 LOGDIR="$HOME/Library/Logs"
 mkdir -p "$LOGDIR"
 LOG="$LOGDIR/virt-manager-macos.log"
 echo "--- $(date) : $APP ---" >>"$LOG"
-exec >>"$LOG" 2>&1 "$RES/__PYEXEC__" "$RES/app.py" "$@"
+exec > >(tee -a "$LOG") 2> >(tee -a "$LOG" >&2) "$RES/__PYEXEC__" "$RES/app.py" "$@"
 """.replace("__PYEXEC__", PYEXEC_REL))
 os.chmod(launcher, 0o755)
 
