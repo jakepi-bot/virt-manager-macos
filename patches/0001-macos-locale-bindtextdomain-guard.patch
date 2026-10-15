@@ -1,0 +1,17 @@
+diff --git a/virtinst/__init__.py b/virtinst/__init__.py
+index eb874063a..c26ed126d 100644
+--- a/virtinst/__init__.py
++++ b/virtinst/__init__.py
+@@ -24,7 +24,11 @@ def _setup_i18n():
+ 
+     gettext.install("virt-manager", BuildConfig.gettext_dir, names=["ngettext"])
+     gettext.bindtextdomain("virt-manager", BuildConfig.gettext_dir)
+-    locale.bindtextdomain("virt-manager", BuildConfig.gettext_dir)
++    # Not available on every platform's python build (macOS CPython has no
++    # libintl bindings); C-lib translations are already handled by gettext
++    # above on platforms that need this.
++    if hasattr(locale, "bindtextdomain"):
++        locale.bindtextdomain("virt-manager", BuildConfig.gettext_dir)
+ 
+ 
+ def _set_libvirt_error_handler():

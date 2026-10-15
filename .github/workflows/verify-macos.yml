@@ -125,6 +125,11 @@ jobs:
           git -C "$SRC" checkout --quiet "$UPSTREAM_SHA"
           git -C "$SRC" log -1 --format='checked out %H %ci %s'
 
+      - name: Apply macOS port patches
+        run: |
+          cd "$RUNNER_TEMP/virt-manager"
+          git apply --verbose "$GITHUB_WORKSPACE"/patches/*.patch
+
       - name: Version + binding matrix
         run: |
           PY="${VM_PYTHON:?install-deps-macos.sh did not find a usable python}"
