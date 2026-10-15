@@ -251,7 +251,7 @@ TYPELIB_ALLOW = [
     "Gdk-3.0", "Gtk-3.0", "GdkPixbuf-2.0",
     "Pango-1.0", "PangoCairo-1.0", "PangoFT2-1.0", "HarfBuzz-0.0",
     "freetype2-2.0", "cairo-1.0", "Atk-1.0",
-    "GtkSource-4", "Vte-2.91", "GtkVnc-2.0",
+    "GtkSource-4", "Vte-2.91", "GtkVnc-2.0", "GVnc-1.0", "GVncExt-1.0",
     "SpiceClientGtk-3.0", "SpiceClientGLib-2.0",
     "Libosinfo-1.0", "libxml2-2.0", "LibvirtGLib-1.0",
     "xlib-2.0", "GL-1.0", "Json-1.0",
@@ -534,7 +534,14 @@ SELFCHECK = join(RES, "selfcheck.py")
 with open(SELFCHECK, "w") as f:
     f.write(
         "import gi\n"
-        "from gi.repository import Gtk, GtkSource, Vte, GtkVnc, SpiceClientGtk, Libosinfo\n"
+        "gi.require_version('GVnc', '1.0')\n"
+        "gi.require_version('GtkVnc', '2.0')\n"
+        "gi.require_version('SpiceClientGLib', '2.0')\n"
+        "gi.require_version('SpiceClientGtk', '3.0')\n"
+        "gi.require_version('Vte', '2.91')\n"
+        "gi.require_version('GtkSource', '4')\n"
+        "from gi.repository import (Gtk, GtkSource, Vte, GVnc, GtkVnc,\n"
+        "                          SpiceClientGtk, SpiceClientGLib, Libosinfo)\n"
         "import libvirt\n"
         "print('GTK %d.%d.%d' % (Gtk.get_major_version(), Gtk.get_minor_version(),\n"
         "                       Gtk.get_micro_version()))\n"
