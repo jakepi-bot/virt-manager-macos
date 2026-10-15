@@ -565,7 +565,19 @@ os.chmod(APP_PY, 0o644)
 SELFCHECK = join(RES, "selfcheck.py")
 with open(SELFCHECK, "w") as f:
     f.write(
+        "import os\n"
+        "import sys\n"
+        "RES = os.path.dirname(os.path.abspath(__file__))\n"
+        "sys.path.insert(0, os.path.join(RES, 'vmroot', 'share', 'virt-manager'))\n"
+        "os.chdir(RES)\n"
         "import gi\n"
+        "gi.require_version('Libosinfo', '1.0')\n"
+        "from gi.repository import Libosinfo\n"
+        "import virtinst\n"
+        "entries = virtinst.OSDB.list_os(sortkey='label')\n"
+        "print('OSDB entries: %d' % len(entries))\n"
+        "if len(entries) < 100:\n"
+        "    raise SystemExit('osinfo database is empty (pci.ids/usb.ids/db?)')\n"
         "gi.require_version('GVnc', '1.0')\n"
         "gi.require_version('GtkVnc', '2.0')\n"
         "gi.require_version('SpiceClientGLib', '2.0')\n"
@@ -577,7 +589,7 @@ with open(SELFCHECK, "w") as f:
         "import libvirt\n"
         "print('GTK %d.%d.%d' % (Gtk.get_major_version(), Gtk.get_minor_version(),\n"
         "                       Gtk.get_micro_version()))\n"
-        "print('bindings ok: Gtk GtkSource Vte GtkVnc SpiceClientGtk Libosinfo libvirt')\n"
+        "print('bindings ok: Gtk GtkSource Vte GVnc GtkVnc Spice libvirt')\n"
         "print('SELFCHECK_OK')\n"
     )
 os.chmod(SELFCHECK, 0o644)
@@ -603,6 +615,9 @@ if [ ! -f "$MODFILE" ] || ! grep -q "$GDK_PIXBUF_MODULEDIR" "$MODFILE" 2>/dev/nu
   GDK_PIXBUF_MODULEDIR="$GDK_PIXBUF_MODULEDIR" "$RES/gdk-pixbuf/query-loaders" >"$MODFILE" 2>/dev/null || rm -f "$MODFILE"
 fi
 [ -f "$MODFILE" ] && export GDK_PIXBUF_MODULE_FILE="$MODFILE"
+# libosinfo in the bundle resolves pci.ids/usb.ids/the osinfo database
+# through strings retargeted to paths relative to $RES
+cd "$RES"
 if [ "${1:-}" = "--selfcheck" ]; then
   exec "$RES/__PYEXEC__" "$RES/selfcheck.py"
 fi
@@ -617,6 +632,65 @@ echo "--- $(date) : $APP ---" >>"$LOG"
 exec >>"$LOG" 2>&1 "$RES/__PYEXEC__" "$RES/app.py" "$@"
 """.replace("__PYEXEC__", PYEXEC_REL))
 os.chmod(launcher, 0o755)
+
+# ------------------------------- libosinfo data (baked absolute paths)
+# libosinfo compiles its pci.ids / usb.ids / db paths into the dylib with no
+# env override, so copy the files and retarget the strings at the copies
+# (relative paths - the launcher chdirs to $RES before starting the app).
+os.makedirs(join(RES, "share", "misc"), exist_ok=True)
+for name in ("pci.ids", "usb.ids"):
+    src = join(BREW, "opt", "libosinfo" if name == "pci.ids" else "usb.ids",
+               "share", "misc", name)
+    if exists(src):
+        shutil.copy2(src, join(RES, "share", "misc", name))
+        log("libosinfo data: %s (%d bytes)" % (name, os.path.getsize(src)))
+    else:
+        log("WARNING: %s not found in the brew tree" % src)
+oidb = join(BREW, "opt", "osinfo-db", "share", "osinfo")
+if exists(oidb):
+    copytree(oidb, join(RES, "share", "osinfo"))
+    log("osinfo database: %s" % oidb)
+else:
+    log("WARNING: osinfo database not found: %s" % oidb)
+
+
+def retarget_brew_cstrings(path, rules):
+    """Rewrite /opt/homebrew/... paths baked into a Mach-O C-string section."""
+    data = open(path, "rb").read()
+    n = 0
+    for suffix, newstr in rules:
+        for m in list(re.finditer(rb"/opt/homebrew[\x20-\x7e]*"
+                                  + re.escape(suffix), data)):
+            s = m.group()
+            if len(newstr) < len(s):
+                data = (data[:m.start()] + newstr +
+                        b"\x00" * (len(s) - len(newstr)) + data[m.end():])
+                n += 1
+    if n:
+        open(path, "wb").write(data)
+    return n
+
+
+RULES = [(b"/share/misc/pci.ids", b"share/misc/pci.ids"),
+         (b"/share/misc/usb.ids", b"share/misc/usb.ids"),
+         (b"/share/osinfo", b"share/osinfo"),
+         (b"/etc/osinfo", b"share/osinfo"),
+         (b"/etc/libosinfo/db", b"share/osinfo")]
+_retargeted = 0
+_retargeted_names = 0
+for so in (join(FW, "libosinfo-1.0.dylib"),
+           join(FW, "libosinfo-1.0.0.dylib")):
+    if exists(so):
+        n = retarget_brew_cstrings(so, RULES)
+        resign(so)
+        _retargeted += n
+        _retargeted_names += 1
+        log("libosinfo paths retargeted in %s (%d strings)"
+            % (basename(so), n))
+if _retargeted_names == 0:
+    raise SystemExit("libosinfo dylib missing from the bundle")
+if _retargeted < 3:
+    raise SystemExit("failed to retarget libosinfo data paths (%d)" % _retargeted)
 
 # icon: build an .icns from the app PNG.  iconutil is picky (it rejected the
 # previous dot-named iconset), so fall back to writing the ICNS container

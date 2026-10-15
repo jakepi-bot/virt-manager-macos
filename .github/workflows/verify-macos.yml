@@ -210,7 +210,13 @@ jobs:
           env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
             SMOKE_LOG="$GITHUB_WORKSPACE/bundle-vmwindow.log" \
             bash scripts/smoke-test-macos.sh "\"$APP/Contents/MacOS/launcher\" --no-fork --debug --connect test:///default --show-domain-editor test" 20
-          grep -E "Showing VM details|SMOKE_RESULT" bundle-vmwindow.log || true
+          grep -E "SMOKE_RESULT" bundle-vmwindow.log || true
+          if ! grep -q "Showing VM details" bundle-vmwindow.log; then
+            echo "FAIL: the VM details window never opened (Open button broken?)"
+            grep -E "Traceback|CRITICAL|GLib-GObject|Error" bundle-vmwindow.log | head -20 || true
+            exit 1
+          fi
+          echo "OK: VM details window opened"
           sudo mv /opt/.hb_hidden /opt/homebrew
           trap - EXIT
 
