@@ -551,33 +551,75 @@ if [ ! -f "$MODFILE" ] || ! grep -q "$GDK_PIXBUF_MODULEDIR" "$MODFILE" 2>/dev/nu
   GDK_PIXBUF_MODULEDIR="$GDK_PIXBUF_MODULEDIR" "$RES/gdk-pixbuf/query-loaders" >"$MODFILE" 2>/dev/null || rm -f "$MODFILE"
 fi
 [ -f "$MODFILE" ] && export GDK_PIXBUF_MODULE_FILE="$MODFILE"
-exec "$RES/__PYEXEC__" "$RES/app.py" "$@"
+if [ -t 1 ]; then
+  exec "$RES/__PYEXEC__" "$RES/app.py" "$@"
+fi
+# launched from Finder/Dock: keep a log, otherwise errors vanish silently
+LOGDIR="$HOME/Library/Logs"
+mkdir -p "$LOGDIR"
+LOG="$LOGDIR/virt-manager-macos.log"
+echo "--- $(date) : $APP ---" >>"$LOG"
+exec >>"$LOG" 2>&1 "$RES/__PYEXEC__" "$RES/app.py" "$@"
 """.replace("__PYEXEC__", PYEXEC_REL))
 os.chmod(launcher, 0o755)
 
-# icon
+# icon: build an .icns from the app PNG.  iconutil is picky (it rejected the
+# previous dot-named iconset), so fall back to writing the ICNS container
+# directly - macOS 10.7+ reads plain PNG payloads.
+ICNS = join(RES, "virt-manager.icns")
 png = None
-for cand in (join(VM, "share", "icons", "hicolor", "256x256", "apps", "virt-manager.png"),
+for cand in (join(VM, "share", "icons", "hicolor", "512x512", "apps", "virt-manager.png"),
+             join(VM, "share", "icons", "hicolor", "256x256", "apps", "virt-manager.png"),
+             join(RES, "share", "icons", "hicolor", "512x512", "apps", "virt-manager.png"),
              join(RES, "share", "icons", "hicolor", "256x256", "apps", "virt-manager.png")):
     if exists(cand):
         png = cand
         break
-if png:
-    tmp = join(RES, ".iconset")
-    shutil.rmtree(tmp, ignore_errors=True)
-    os.makedirs(tmp)
-    ok = True
-    for s in (16, 32, 128, 256, 512):
-        r1 = run(["sips", "-z", str(s), str(s), png, "--out", join(tmp, "icon_%dx%d.png" % (s, s))], check=False)
-        r2 = run(["sips", "-z", str(s * 2), str(s * 2), png, "--out", join(tmp, "icon_%dx%d@2x.png" % (s, s))], check=False)
-        ok = ok and r1.returncode == 0 and r2.returncode == 0
-    r = run(["iconutil", "-c", "icns", tmp, "-o", join(RES, "virt-manager.icns")], check=False)
-    if r.returncode != 0:
-        log("WARNING: icon conversion failed: %s" % (r.stderr or "")[:300])
-    shutil.rmtree(tmp, ignore_errors=True)
+if not png:
+    raise SystemExit("no virt-manager icon PNG found in the app tree")
+log("icon source: %s" % png)
+tmp = join(RES, "virt-manager.iconset")
+shutil.rmtree(tmp, ignore_errors=True)
+os.makedirs(tmp)
+sizes = {}
+for s in (16, 32, 128, 256, 512):
+    for scale, tag in ((1, ""), (2, "@2x")):
+        px = s * scale
+        out = join(tmp, "icon_%dx%d%s.png" % (s, s, tag))
+        r = run(["sips", "-z", str(px), str(px), png, "--out", out], check=False)
+        if r.returncode != 0 or not exists(out):
+            log("WARNING: sips failed for %dpx: %s" % (px, (r.stderr or "")[:200]))
+        else:
+            sizes[px] = out
+icns_ok = False
+r = run(["iconutil", "-c", "icns", tmp, "-o", ICNS], check=False)
+if r.returncode == 0 and exists(ICNS):
+    icns_ok = True
+    log("icon: built with iconutil (%d bytes)" % os.path.getsize(ICNS))
 else:
-    log("WARNING: no icon PNG found")
+    log("icon: iconutil failed (%s); writing ICNS directly"
+        % (r.stderr or "").strip()[:160])
+    import struct
+    # PNG-payload ICNS type codes (fixed by the format)
+    TYPE = {16: b"icp4", 32: b"icp5", 64: b"ic12", 128: b"ic07",
+            256: b"ic08", 512: b"ic09", 1024: b"ic10"}
+    chunks = b""
+    for px in sorted(sizes):
+        t = TYPE.get(px)
+        if not t:
+            continue
+        data = open(sizes[px], "rb").read()
+        chunks += t + struct.pack(">I", len(data) + 8) + data
+    if chunks:
+        with open(ICNS, "wb") as f:
+            f.write(b"icns" + struct.pack(">I", len(chunks) + 8) + chunks)
+        icns_ok = os.path.getsize(ICNS) > 1024
+        log("icon: wrote ICNS directly (%d bytes)" % os.path.getsize(ICNS))
+shutil.rmtree(tmp, ignore_errors=True)
+if not icns_ok:
+    raise SystemExit("failed to produce virt-manager.icns")
 
+BUNDLE_VER = os.environ.get("BUNDLE_VERSION", "1.0").lstrip("v")
 with open(join(C, "Info.plist"), "wb") as f:
     plistlib.dump({
         "CFBundleName": "Virtual Machine Manager",
@@ -585,8 +627,8 @@ with open(join(C, "Info.plist"), "wb") as f:
         "CFBundleIdentifier": "org.virt-manager.virtmanager.macos-bundle",
         "CFBundleExecutable": "launcher",
         "CFBundlePackageType": "APPL",
-        "CFBundleVersion": "1.0",
-        "CFBundleShortVersionString": "1.0",
+        "CFBundleVersion": BUNDLE_VER,
+        "CFBundleShortVersionString": BUNDLE_VER,
         "CFBundleIconFile": "virt-manager",
         "LSMinimumSystemVersion": "15.0",
         "NSHighResolutionCapable": True,

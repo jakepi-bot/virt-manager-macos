@@ -170,7 +170,20 @@ jobs:
         run: brew install virt-manager
 
       - name: Build self-contained bundle
+        env:
+          BUNDLE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '1.0-dev' }}
         run: /usr/bin/python3 scripts/macos-bundle.py dist
+
+      - name: Assert app icon + Info.plist
+        run: |
+          APP="dist/Virtual Machine Manager.app"
+          test -s "$APP/Contents/Resources/virt-manager.icns"
+          ls -l "$APP/Contents/Resources/virt-manager.icns"
+          file "$APP/Contents/Resources/virt-manager.icns"
+          ICON=$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist")
+          test "$ICON" = "virt-manager"
+          echo "OK: icns present and Info.plist references $ICON"
+          plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist"
 
       - name: Relocate app and run it with Homebrew hidden
         run: |
