@@ -105,7 +105,7 @@ else:
 SP = join(STDLIB_DST, "site-packages")
 PYEXEC = join(RES, PYEXEC_REL)
 
-for d in (APP, C, MACOS, RES, FW, SP, VMROOT):
+for d in (APP, C, MACOS, RES, FW, VMROOT):
     os.makedirs(d, exist_ok=True)
 
 PRUNE = shutil.ignore_patterns("__pycache__", "*.pyc")
@@ -155,6 +155,11 @@ if PYFRAMEWORK_SRC:
     shutil.copytree(PYFRAMEWORK_SRC, PYFWDST, symlinks=True, dirs_exist_ok=True,
                     ignore=PRUNE)
     make_writable(PYFWDST)
+    # brew's framework site-packages is a symlink to the brew-wide dir;
+    # replace it with a real directory that we populate below
+    if os.path.islink(SP):
+        os.unlink(SP)
+    os.makedirs(SP, exist_ok=True)
     log("python framework: %s" % PYFRAMEWORK_SRC)
     # canonical locations inside an .app (harmless, aids other conventions)
     compat = join(FW, "Python.framework")
@@ -190,6 +195,7 @@ else:
         raise SystemExit("could not locate the python standard library")
     log("stdlib       : %s" % stdlib_src)
     copytree(stdlib_src, STDLIB_DST)
+    os.makedirs(SP, exist_ok=True)
 log("python exec  : %s" % PYEXEC)
 for junk in ("test", "idlelib", "tkinter", "turtledemo", "ensurepip"):
     shutil.rmtree(join(STDLIB_DST, junk), ignore_errors=True)
