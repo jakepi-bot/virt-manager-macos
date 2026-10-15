@@ -198,6 +198,22 @@ jobs:
           sudo mv /opt/.hb_hidden /opt/homebrew
           trap - EXIT
 
+      - name: Bundle self-check + VM window (Homebrew hidden)
+        if: always()
+        run: |
+          set -x
+          APP="$RUNNER_TEMP/relo/Virtual Machine Manager.app"
+          sudo mv /opt/homebrew /opt/.hb_hidden
+          trap 'sudo mv /opt/.hb_hidden /opt/homebrew 2>/dev/null || true' EXIT
+          env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+            "$APP/Contents/MacOS/launcher" --selfcheck
+          env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+            SMOKE_LOG="$GITHUB_WORKSPACE/bundle-vmwindow.log" \
+            bash scripts/smoke-test-macos.sh "\"$APP/Contents/MacOS/launcher\" --no-fork --debug --connect test:///default --show-domain-editor test" 20
+          grep -E "Showing VM details|SMOKE_RESULT" bundle-vmwindow.log || true
+          sudo mv /opt/.hb_hidden /opt/homebrew
+          trap - EXIT
+
       - name: Assert zero Homebrew references at runtime
         if: always()
         run: |
@@ -231,6 +247,7 @@ jobs:
             dist/virt-manager-macos-arm64.zip
             SHA256SUMS.txt
             bundle-smoke.log
+            bundle-vmwindow.log
           if-no-files-found: warn
 
   release:

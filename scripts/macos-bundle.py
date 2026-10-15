@@ -530,6 +530,19 @@ with open(APP_PY, "w") as f:
     )
 os.chmod(APP_PY, 0o644)
 
+SELFCHECK = join(RES, "selfcheck.py")
+with open(SELFCHECK, "w") as f:
+    f.write(
+        "import gi\n"
+        "from gi.repository import Gtk, GtkSource, Vte, GtkVnc, SpiceClientGtk, Libosinfo\n"
+        "import libvirt\n"
+        "print('GTK %d.%d.%d' % (Gtk.get_major_version(), Gtk.get_minor_version(),\n"
+        "                       Gtk.get_micro_version()))\n"
+        "print('bindings ok: Gtk GtkSource Vte GtkVnc SpiceClientGtk Libosinfo libvirt')\n"
+        "print('SELFCHECK_OK')\n"
+    )
+os.chmod(SELFCHECK, 0o644)
+
 launcher = join(MACOS, "launcher")
 with open(launcher, "w") as f:
     f.write("""#!/bin/bash
@@ -551,6 +564,9 @@ if [ ! -f "$MODFILE" ] || ! grep -q "$GDK_PIXBUF_MODULEDIR" "$MODFILE" 2>/dev/nu
   GDK_PIXBUF_MODULEDIR="$GDK_PIXBUF_MODULEDIR" "$RES/gdk-pixbuf/query-loaders" >"$MODFILE" 2>/dev/null || rm -f "$MODFILE"
 fi
 [ -f "$MODFILE" ] && export GDK_PIXBUF_MODULE_FILE="$MODFILE"
+if [ "${1:-}" = "--selfcheck" ]; then
+  exec "$RES/__PYEXEC__" "$RES/selfcheck.py"
+fi
 if [ -t 1 ]; then
   exec "$RES/__PYEXEC__" "$RES/app.py" "$@"
 fi
