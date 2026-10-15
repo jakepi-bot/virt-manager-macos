@@ -242,12 +242,13 @@ gir_dst = join(RES, "girepository")
 gir_src = join(BREW, "lib", "girepository-1.0")
 TYPELIB_ALLOW = [
     "GLib-2.0", "GObject-2.0", "Gio-2.0", "GModule-2.0",
+    "GLibUnix-2.0", "GioUnix-2.0",
     "Gdk-3.0", "Gtk-3.0", "GdkPixbuf-2.0",
     "Pango-1.0", "PangoCairo-1.0", "PangoFT2-1.0", "HarfBuzz-0.0",
     "freetype2-2.0", "cairo-1.0", "Atk-1.0",
     "GtkSource-4", "Vte-2.91", "GtkVnc-2.0",
     "SpiceClientGtk-3.0", "SpiceClientGLib-2.0",
-    "Libosinfo-1.0", "LibvirtGLib-1.0",
+    "Libosinfo-1.0", "libxml2-2.0", "LibvirtGLib-1.0",
     "xlib-2.0", "GL-1.0", "Json-1.0",
 ]
 os.makedirs(gir_dst, exist_ok=True)
