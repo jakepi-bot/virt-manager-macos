@@ -73,12 +73,32 @@ MACOS = join(C, "MacOS")
 RES = join(C, "Resources")
 FW = join(C, "Frameworks")
 PYRES = join(RES, "python")
-STDLIB_DST = join(PYRES, "lib", "python" + PYVER)
-SP = join(STDLIB_DST, "site-packages")
 VMROOT = join(RES, "vmroot")
 
-for d in (APP, C, MACOS, RES, FW, join(PYRES, "bin"), join(PYRES, "lib"),
-          STDLIB_DST, SP, VMROOT):
+
+def _has_stdlib(p):
+    return exists(join(p, "encodings"))
+
+
+# Locate the python home.  Homebrew python is a framework build
+# (Frameworks/Python.framework/Versions/X.Y/...); we preserve that layout
+# inside the bundle so the interpreter relocates cleanly.  Plain layout is a
+# fallback.
+fw_ver = join(PYOPT, "Frameworks", "Python.framework", "Versions", PYVER)
+if _has_stdlib(join(fw_ver, "lib", "python" + PYVER)):
+    PYFRAMEWORK_SRC = fw_ver
+    PYEXEC_REL = join("python", "Frameworks", "Python.framework", "Versions",
+                      PYVER, "bin", "python" + PYVER)
+    STDLIB_DST = join(PYRES, "Frameworks", "Python.framework", "Versions",
+                      PYVER, "lib", "python" + PYVER)
+else:
+    PYFRAMEWORK_SRC = None
+    PYEXEC_REL = join("python", "bin", "python" + PYVER)
+    STDLIB_DST = join(PYRES, "lib", "python" + PYVER)
+SP = join(STDLIB_DST, "site-packages")
+PYEXEC = join(RES, PYEXEC_REL)
+
+for d in (APP, C, MACOS, RES, FW, SP, VMROOT):
     os.makedirs(d, exist_ok=True)
 
 PRUNE = shutil.ignore_patterns("__pycache__", "*.pyc")
@@ -99,31 +119,29 @@ def copyfile(src, dst, mode=None):
 
 
 # ------------------------------------------------------------------ 1. python
-bin_src = realpath(join(PYOPT, "bin", "python" + PYVER))
-if not exists(bin_src):
-    raise SystemExit("python binary not found: %s" % bin_src)
-copyfile(bin_src, join(PYRES, "bin", "python" + PYVER), mode=0o755)
-log("python binary: %s" % bin_src)
-
-libpy = glob.glob(join(PYOPT, "lib", "libpython%s*.dylib" % PYVER))
-libpy += glob.glob(join(PYOPT, "Frameworks", "Python.framework", "Versions",
-                         "*", "lib", "libpython%s*.dylib" % PYVER))
-if libpy:
-    copyfile(libpy[0], join(PYRES, "lib", basename(libpy[0])))
-    log("libpython    : %s" % libpy[0])
+if PYFRAMEWORK_SRC:
+    copytree(PYFRAMEWORK_SRC, join(PYRES, "Frameworks", "Python.framework",
+                                   "Versions", PYVER))
+    log("python framework: %s" % PYFRAMEWORK_SRC)
 else:
-    log("WARNING: no libpython dylib found (static build?)")
-
-stdlib_src = None
-for cand in (join(PYOPT, "lib", "python" + PYVER),
-             join(BREW, "lib", "python" + PYVER)):
-    if exists(join(cand, "encodings")):
-        stdlib_src = cand
-        break
-if not stdlib_src:
-    raise SystemExit("could not locate the python standard library")
-log("stdlib       : %s" % stdlib_src)
-copytree(stdlib_src, STDLIB_DST)
+    bin_src = realpath(join(PYOPT, "bin", "python" + PYVER))
+    if not exists(bin_src):
+        raise SystemExit("python binary not found: %s" % bin_src)
+    copyfile(bin_src, join(RES, PYEXEC_REL), mode=0o755)
+    libpy = glob.glob(join(PYOPT, "lib", "libpython%s*.dylib" % PYVER))
+    if libpy:
+        copyfile(libpy[0], join(PYRES, "lib", basename(libpy[0])))
+    stdlib_src = None
+    for cand in (join(PYOPT, "lib", "python" + PYVER),
+                 join(BREW, "lib", "python" + PYVER)):
+        if _has_stdlib(cand):
+            stdlib_src = cand
+            break
+    if not stdlib_src:
+        raise SystemExit("could not locate the python standard library")
+    log("stdlib       : %s" % stdlib_src)
+    copytree(stdlib_src, STDLIB_DST)
+log("python exec  : %s" % PYEXEC)
 for junk in ("test", "idlelib", "tkinter", "turtledemo", "ensurepip"):
     shutil.rmtree(join(STDLIB_DST, junk), ignore_errors=True)
 
@@ -265,13 +283,13 @@ def resolve(dep, fp, rpaths):
     elif dep.startswith("@loader_path/"):
         cands.append(os.path.normpath(join(dirname(fp), dep[len("@loader_path/"):])))
     elif dep.startswith("@executable_path/"):
-        exe = dirname(join(PYRES, "bin", "python" + PYVER))
+        exe = dirname(PYEXEC)
         cands.append(os.path.normpath(join(exe, dep[len("@executable_path/"):])))
     elif dep.startswith("@rpath/"):
         suffix = dep[len("@rpath/"):]
         for rp in rpaths:
             rp2 = rp.replace("@loader_path", dirname(fp))
-            rp2 = rp2.replace("@executable_path", dirname(join(PYRES, "bin", "python" + PYVER)))
+            rp2 = rp2.replace("@executable_path", dirname(PYEXEC))
             cands.append(join(rp2, suffix))
     for c in cands:
         if exists(c):
@@ -294,7 +312,7 @@ def enqueue(fp):
     pending.append(fp)
 
 
-enqueue(join(PYRES, "bin", "python" + PYVER))
+enqueue(PYEXEC)
 enqueue(join(gpb_dst, "query-loaders"))
 for base in (SP, join(gpb_dst, "loaders")):
     for root, _dirs, files in os.walk(base):
@@ -433,8 +451,8 @@ if [ ! -f "$MODFILE" ] || ! grep -q "$GDK_PIXBUF_MODULEDIR" "$MODFILE" 2>/dev/nu
   GDK_PIXBUF_MODULEDIR="$GDK_PIXBUF_MODULEDIR" "$RES/gdk-pixbuf/query-loaders" >"$MODFILE" 2>/dev/null || rm -f "$MODFILE"
 fi
 [ -f "$MODFILE" ] && export GDK_PIXBUF_MODULE_FILE="$MODFILE"
-exec "$RES/python/bin/python__PYVER__" "$RES/app.py" "$@"
-""".replace("__PYVER__", PYVER))
+exec "$RES/__PYEXEC__" "$RES/app.py" "$@"
+""".replace("__PYEXEC__", PYEXEC_REL))
 os.chmod(launcher, 0o755)
 
 # icon
