@@ -1,0 +1,33 @@
+NOTICE / LICENSES
+=================
+
+This bundle redistributes unmodified and re-linked binaries from Homebrew
+(https://brew.sh) arm64 bottles, built from the following upstream sources.
+Full license texts ship inside the Homebrew bottles and at the links below.
+
+- virt-manager 5.1.0 — GPL-2.0-or-later
+  https://github.com/virt-manager/virt-manager
+- Python 3.15 — PSF-2.0  https://www.python.org
+- PyGObject (pygobject3) — LGPL-2.1-or-later  https://pygobject.gnome.org
+- GTK 3, GLib, Pango, GdkPixbuf, gsettings-desktop-schemas — LGPL-2.1-or-later
+  https://gtk.org
+- GtkSourceView 4 — LGPL-2.1-or-later  https://gitlab.gnome.org/GNOME/gtksourceview
+- VTE 3 (vte3) — LGPL-3.0-or-later  https://gitlab.gnome.org/GNOME/vte
+- gtk-vnc — LGPL-2.1-or-later  https://gitlab.gnome.org/GNOME/gtk-vnc
+- spice-gtk — GPL-2.0-or-later / LGPL / BSD  https://www.spice-space.org
+- libvirt, libvirt-glib, libvirt-python — LGPL-2.1-or-later  https://libvirt.org
+- libosinfo + osinfo-db — LGPL-2.0-or-later / CC0  https://libosinfo.org
+- cairo, pycairo — LGPL-2.1 / MPL-1.1  https://www.cairographics.org
+- OpenSSL — Apache-2.0  https://openssl.org
+- curl — curl license  https://curl.se
+- libxml2 — MIT  https://gitlab.gnome.org/GNOME/libxml2
+- requests, urllib3, idna, charset-normalizer, certifi — Apache-2.0 / MIT / MPL
+  https://requests.readthedocs.io
+
+Exact bottle sources and digests: this bundle was assembled on an arm64 macOS
+GitHub Actions runner by
+https://github.com/jakepi-bot/virt-manager-macos (scripts/macos-bundle.py);
+the run log lists every component's Homebrew version. Corresponding source
+code for all components is available at the upstream links above and via
+`brew fetch --build-from-source <formula>`; Homebrew formulae:
+https://formulae.brew.sh.

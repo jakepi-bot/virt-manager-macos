@@ -3,6 +3,7 @@ name: verify-macos-arm64
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths-ignore: ["**.md"]
   workflow_dispatch: {}
 
@@ -59,7 +60,7 @@ jobs:
         run: |
           SMOKE_LOG="$PWD/smoke-details.log" bash scripts/smoke-test-macos.sh "virt-manager --no-fork --debug --connect test:///default --show-domain-editor test" 15
 
-      - name: Build .app bundle
+      - name: Build .app bundle (thin, Homebrew launcher)
         run: |
           bash scripts/make-app-bundle.sh "$RUNNER_TEMP/apps"
           APP="$RUNNER_TEMP/apps/Virtual Machine Manager.app"
@@ -152,3 +153,96 @@ jobs:
             binding-matrix.txt
             smoke.log
           if-no-files-found: warn
+
+  bundle:
+    name: self-contained .app (arm64)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert Apple Silicon
+        run: |
+          sw_vers
+          uname -m
+          test "$(uname -m)" = "arm64"
+
+      - name: Install virt-manager
+        run: brew install virt-manager
+
+      - name: Build self-contained bundle
+        run: /usr/bin/python3 scripts/macos-bundle.py dist
+
+      - name: Relocate app and run it with Homebrew hidden
+        run: |
+          set -x
+          mkdir -p "$RUNNER_TEMP/relo"
+          cp -R "dist/Virtual Machine Manager.app" "$RUNNER_TEMP/relo/"
+          sudo mv /opt/homebrew /opt/.hb_hidden
+          trap 'sudo mv /opt/.hb_hidden /opt/homebrew 2>/dev/null || true' EXIT
+          env -i HOME="$HOME" PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+            DYLD_PRINT_LIBRARIES=1 \
+            SMOKE_LOG="$GITHUB_WORKSPACE/bundle-smoke.log" \
+            bash scripts/smoke-test-macos.sh "$RUNNER_TEMP/relo/Virtual Machine Manager.app/Contents/MacOS/launcher --no-fork --debug --connect test:///default" 25
+          sudo mv /opt/.hb_hidden /opt/homebrew
+          trap - EXIT
+
+      - name: Assert zero Homebrew references at runtime
+        if: always()
+        run: |
+          echo "--- sample of loaded libraries ---"
+          grep -oE "/[^ ]+\.(dylib|so)" bundle-smoke.log 2>/dev/null | sort -u | head -30 || true
+          if grep -q "/opt/homebrew" bundle-smoke.log; then
+            echo "FAIL: /opt/homebrew referenced at runtime:"
+            grep -m 10 "/opt/homebrew" bundle-smoke.log
+            exit 1
+          fi
+          echo "OK: zero /opt/homebrew references in the runtime log"
+          grep -E "SMOKE_RESULT|GTK version|Showing manager" bundle-smoke.log || true
+
+      - name: Package zip + checksums
+        run: |
+          PKG="$RUNNER_TEMP/pkg/virt-manager-macos"
+          mkdir -p "$PKG"
+          ditto "$RUNNER_TEMP/relo/Virtual Machine Manager.app" "$PKG/Virtual Machine Manager.app"
+          cp packaging/README-FIRST.txt packaging/NOTICE.txt "$PKG/"
+          mkdir -p dist
+          (cd "$RUNNER_TEMP/pkg" && ditto -c -k --keepParent virt-manager-macos "$GITHUB_WORKSPACE/dist/virt-manager-macos-arm64.zip")
+          cd dist && shasum -a 256 virt-manager-macos-arm64.zip | tee "$GITHUB_WORKSPACE/SHA256SUMS.txt"
+          ls -la "$GITHUB_WORKSPACE/dist"
+
+      - name: Upload app artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: virt-manager-macos-app
+          path: |
+            dist/virt-manager-macos-arm64.zip
+            SHA256SUMS.txt
+            bundle-smoke.log
+          if-no-files-found: warn
+
+  release:
+    name: publish GitHub release
+    needs: [bundle]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: virt-manager-macos-app
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "virt-manager $GITHUB_REF_NAME — self-contained macOS arm64 app" \
+            --notes-file packaging/RELEASE_NOTES.md \
+            dist/virt-manager-macos-arm64.zip dist/SHA256SUMS.txt

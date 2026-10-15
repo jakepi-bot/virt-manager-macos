@@ -13,7 +13,14 @@ that path end-to-end on real arm64 macOS GitHub Actions runners.
 > connect natively on macOS 15 Sequoia + macOS 26 Tahoe. Full evidence:
 > [VERIFICATION.md](VERIFICATION.md).
 
-## Quick start (Homebrew, recommended)
+## Download (prebuilt, nothing else needed)
+
+**[Releases →](https://github.com/jakepi-bot/virt-manager-macos/releases)** — a
+self-contained `Virtual Machine Manager.app` (arm64, macOS 15+): the whole
+GTK/Python stack lives inside the bundle. Unzip, drag to /Applications,
+right-click → Open the first time (it is ad-hoc signed, not notarized).
+
+## Alternative: run it via Homebrew
 
 ```sh
 brew install virt-manager
@@ -51,6 +58,8 @@ not affected.
 | `scripts/check-bindings.py` | Reports which GI bindings are available (console backends, osinfo, …) |
 | `scripts/smoke-test-macos.sh` | GUI launch smoke test (also used by CI): launches the app, asserts the main loop stays alive, scans log for crash signatures |
 | `scripts/make-app-bundle.sh` | Builds a thin `.app` launcher for the Homebrew install |
+| `scripts/macos-bundle.py` | Builds the **self-contained** `.app` (bundles Python, GTK and every dylib; no Homebrew at runtime) |
+| `packaging/` | Files shipped inside the release zip (README-FIRST, NOTICE) + release notes |
 | `patches/` | Patch applied to upstream master for macOS (see `patches/README.md`) |
 | `.github/workflows/verify-macos.yml` | CI: `packaged` + `from-source` jobs on `macos-15` / `macos-26` arm64 runners, incl. REA Mach-O inspection |
 | `Brewfile` | Same deps as `install-deps-macos.sh`, for `brew bundle` |
