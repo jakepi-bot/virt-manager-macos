@@ -73,6 +73,16 @@ if [ -z "$FOUND" ]; then
   exit 1
 fi
 
+# virt-manager's virtinst package imports `requests` at import time
+# (virtinst.install.urlfetcher).  Homebrew's virt-manager formula ships
+# requests inside its venv; when running from a checkout, install it into the
+# selected interpreter so `import virtinst` works.
+if ! "$FOUND" -m pip install --break-system-packages --quiet requests; then
+  echo "system pip install failed; retrying with --user"
+  "$FOUND" -m pip install --user --break-system-packages --quiet requests
+fi
+"$FOUND" -c 'import requests; print("requests", requests.__version__)'
+
 if [ -n "$NEED_TYPELIBS" ]; then
   echo "note: this python needs GI_TYPELIB_PATH=$NEED_TYPELIBS (exporting)"
   export GI_TYPELIB_PATH="$NEED_TYPELIBS"
