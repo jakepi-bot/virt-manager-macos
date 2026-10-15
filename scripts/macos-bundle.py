@@ -184,9 +184,12 @@ if exists(pth):
         if exists(target):
             copytree(target, SP)
     os.remove(pth)
+# The brew-wide site-packages directory mostly holds unrelated formulae (and
+# runner-image preinstalls); everything virt-manager needs is merged from the
+# venv and the addsitedir targets above, so it is intentionally not copied.
 global_sp = join(BREW, "lib", "python" + PYVER, "site-packages")
-if exists(global_sp) and realpath(global_sp) != realpath(SP):
-    copytree(global_sp, SP)
+if exists(global_sp):
+    log("skipping global site-packages: %s" % global_sp)
 for p in glob.glob(join(SP, "*.pth")):
     txt = open(p).read()
     if BREW in txt:
@@ -281,6 +284,20 @@ def otool_rpaths(path):
                     rpaths.append(s.split()[1])
                     break
     return rpaths
+
+
+def otool_id(path):
+    r = run(["otool", "-l", path], check=False)
+    if r.returncode != 0:
+        return None
+    lines = r.stdout.splitlines()
+    for i, ln in enumerate(lines):
+        if "LC_ID_DYLIB" in ln:
+            for j in range(i, min(i + 6, len(lines))):
+                s = lines[j].strip()
+                if s.startswith("name "):
+                    return s.split()[1]
+    return None
 
 
 def is_macho(path):
@@ -389,6 +406,9 @@ while pending:
         continue
     deps = otool_deps(fp) or []
     rpaths = otool_rpaths(fp)
+    fid = otool_id(fp)
+    if fid:
+        deps = [d for d in deps if d != fid]  # don't treat self-id as a dep
     changes = []
     for dep in deps:
         kind, src = resolve(dep, fp, rpaths)
@@ -424,6 +444,10 @@ while pending:
         cmd.append(fp)
         run(cmd)
         resign(fp)
+    fid = otool_id(fp)
+    if fid and fid.startswith("/"):
+        run(["install_name_tool", "-id", "@loader_path/" + basename(fp), fp], check=False)
+        resign(fp)
 
 log("walk done: %d Mach-O files processed, %d dylibs copied into Frameworks"
     % (len(processed), len(copied)))
@@ -433,7 +457,10 @@ bad = []
 for fp in sorted(processed):
     if not is_macho(fp):
         continue
+    fid = otool_id(fp)
     for dep in otool_deps(fp) or []:
+        if dep == fid:
+            continue
         if BREW in dep or "/opt/homebrew" in dep:
             bad.append((fp, dep))
 if bad:
