@@ -49,4 +49,5 @@ if ! grep -q "virt-manager version" "$LOG"; then
   echo "WARN: expected 'virt-manager version' debug line not found in log"
 fi
 
+echo "SMOKE_RESULT: rc=$rc alive_target=${ALIVE}s log=$LOG" >> "$LOG"
 exit "$rc"

@@ -3,12 +3,12 @@ name: verify-macos-arm64
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md"]
   workflow_dispatch: {}
 
 env:
   # virt-manager master as inspected for this port (2026-09-04)
   UPSTREAM_SHA: bac5379d085219457a39c5e7c2a5855919d58ef8
-  HOMEBREW_NO_AUTO_UPDATE: "1"
   HOMEBREW_NO_INSTALL_CLEANUP: "1"
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15] # macos-26 (Tahoe) added once the first run is green
+        os: [macos-15, macos-26]
     steps:
       - uses: actions/checkout@v4
 
@@ -33,13 +33,17 @@ jobs:
 
       - name: Report installed versions
         run: |
-          brew list --versions virt-manager
+          brew info virt-manager | sed -n '1,6p'
+          brew list --versions virt-manager gtk+3 pygobject3 libvirt-python vte3 gtk-vnc spice-gtk libosinfo gtksourceview4 || true
           virt-manager --version
           virt-install --version
 
-      - name: GI binding matrix
+      - name: GI binding matrix (formula venv python)
         run: |
-          "$(brew --prefix)/bin/python3" scripts/check-bindings.py | tee binding-matrix.txt
+          VPY="$(brew --prefix)/opt/virt-manager/libexec/bin/python"
+          [ -x "$VPY" ] || VPY="$(brew --prefix)/bin/python3"
+          echo "using: $VPY"
+          "$VPY" scripts/check-bindings.py | tee binding-matrix.txt
 
       - name: virtinst CLI smoke (test driver)
         run: |
@@ -47,15 +51,29 @@ jobs:
             --disk none --import --osinfo detect=on,require=off --print-xml > guest.xml
           grep -q "<name>ciguest</name>" guest.xml && echo "virtinst smoke OK"
 
-      - name: GUI launch smoke
-        run: SMOKE_LOG="$PWD/smoke.log" bash scripts/smoke-test-macos.sh "virt-manager --no-fork --debug --connect test:///default"
+      - name: GUI launch smoke (manager window)
+        run: |
+          SMOKE_LOG="$PWD/smoke.log" bash scripts/smoke-test-macos.sh "virt-manager --no-fork --debug --connect test:///default"
+
+      - name: GUI launch smoke (domain editor window)
+        run: |
+          SMOKE_LOG="$PWD/smoke-details.log" bash scripts/smoke-test-macos.sh "virt-manager --no-fork --debug --connect test:///default --show-domain-editor test" 15
+
+      - name: Build .app bundle
+        run: |
+          bash scripts/make-app-bundle.sh "$RUNNER_TEMP/apps"
+          APP="$RUNNER_TEMP/apps/Virtual Machine Manager.app"
+          test -x "$APP/Contents/MacOS/launcher"
+          test -f "$APP/Contents/Info.plist"
+          ls -la "$APP/Contents" "$APP/Contents/Resources" || true
 
       - name: REA CLI — inspect native arm64 Mach-O components
         if: always()
         run: |
           GTK_LIB="$(ls "$(brew --prefix)"/opt/gtk+3/lib/libgtk-3*.dylib 2>/dev/null | head -1)"
-          VTE_LIB="$(ls "$(brew --prefix)"/opt/vte3/lib/libvte-2.91*.dylib 2>/dev/null | head -1)"
-          LIBVIRT_SO="$(ls "$(brew --prefix)"/opt/libvirt-python/lib/python3.15/site-packages/libvirtmod*.so 2>/dev/null | head -1)"
+          VTE_LIB="$(ls "$(brew --prefix)"/opt/vte3/lib/libvte-2.91.0.dylib 2>/dev/null | head -1)"
+          [ -n "$VTE_LIB" ] || VTE_LIB="$(ls "$(brew --prefix)"/opt/vte3/lib/libvte-2.91*.dylib 2>/dev/null | head -1)"
+          LIBVIRT_SO="$(ls "$(brew --prefix)"/opt/libvirt-python/lib/python3.*/site-packages/libvirtmod*.so 2>/dev/null | head -1)"
           for f in "$GTK_LIB" "$VTE_LIB" "$LIBVIRT_SO"; do
             if [ -z "$f" ] || [ ! -f "$f" ]; then echo "missing: $f"; continue; fi
             out="rea-$(basename "$f").txt"
@@ -72,6 +90,7 @@ jobs:
             binding-matrix.txt
             guest.xml
             smoke.log
+            smoke-details.log
             rea-*.txt
           if-no-files-found: warn
 
@@ -81,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15] # macos-26 (Tahoe) added once the first run is green
+        os: [macos-15, macos-26]
     steps:
       - uses: actions/checkout@v4
 
@@ -91,25 +110,32 @@ jobs:
           uname -m
           test "$(uname -m)" = "arm64"
 
-      - name: Install dependencies (same set as the Homebrew formula)
+      - name: Install dependencies (component set of the Homebrew formula)
         run: bash scripts/install-deps-macos.sh
 
       - name: Fetch virt-manager master
         run: |
-          git clone --quiet https://github.com/virt-manager/virt-manager.git "$RUNNER_TEMP/virt-manager"
-          git -C "$RUNNER_TEMP/virt-manager" checkout --quiet "$UPSTREAM_SHA"
-          git -C "$RUNNER_TEMP/virt-manager" log -1 --format='checked out %H %ci %s'
+          SRC="$RUNNER_TEMP/virt-manager"
+          git init --quiet "$SRC"
+          git -C "$SRC" remote add origin https://github.com/virt-manager/virt-manager.git
+          if ! git -C "$SRC" fetch --quiet --depth 1 origin "$UPSTREAM_SHA"; then
+            echo "depth-1 fetch of $UPSTREAM_SHA failed; falling back to full fetch"
+            git -C "$SRC" fetch --quiet origin
+          fi
+          git -C "$SRC" checkout --quiet "$UPSTREAM_SHA"
+          git -C "$SRC" log -1 --format='checked out %H %ci %s'
 
       - name: Version + binding matrix
         run: |
-          PY="$(brew --prefix)/bin/python3"
+          PY="${VM_PYTHON:?install-deps-macos.sh did not find a usable python}"
+          echo "python: $PY"
           "$PY" --version
           "$PY" "$RUNNER_TEMP/virt-manager/virt-manager" --version
           "$PY" scripts/check-bindings.py | tee binding-matrix.txt
 
-      - name: GUI launch smoke
+      - name: GUI launch smoke (from source)
         run: |
-          PY="$(brew --prefix)/bin/python3"
+          PY="${VM_PYTHON:?install-deps-macos.sh did not find a usable python}"
           SMOKE_LOG="$PWD/smoke.log" bash scripts/smoke-test-macos.sh "$PY $RUNNER_TEMP/virt-manager/virt-manager --no-fork --debug --connect test:///default"
 
       - name: Upload evidence
