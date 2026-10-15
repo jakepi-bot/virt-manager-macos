@@ -1,4 +1,4 @@
-# Prebuilt app (draft notes; the release body is generated from this file)
+# virt-manager on Apple Silicon macOS (self-contained app)
 
 **Self-contained virt-manager for Apple Silicon Macs** — the whole GTK/Python
 stack lives inside the `.app`; no Homebrew, no X11, no Rosetta required.
@@ -24,7 +24,7 @@ qemu+ssh://youruser@your-hypervisor/system
 
 ## What's inside
 
-virt-manager 5.1.0 + Python 3.15, GTK 3 (Quartz), GtkSourceView4, VTE,
+virt-manager 5.1.0 + Python 3.14, GTK 3 (Quartz), GtkSourceView4, VTE,
 gtk-vnc, spice-gtk, libosinfo, libvirt(-glib/-python), requests — arm64
 binaries from Homebrew bottles, re-linked to run from inside the bundle.
 

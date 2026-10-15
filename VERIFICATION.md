@@ -5,6 +5,25 @@ All results below come from GitHub Actions runs of
 GitHub-hosted **arm64 (Apple Silicon)** macOS runners. Evidence artifacts
 (logs, binding matrices, REA reports) are attached to each run.
 
+## Self-contained app (`.app`) — CI-verified
+
+The `self-contained .app (arm64)` job runs `scripts/macos-bundle.py` on a
+`macos-15` arm64 runner, then **relocates the bundle to a fresh directory,
+hides Homebrew (`/opt/homebrew` → `/opt/.hb_hidden`) and launches it** —
+proving the app needs nothing from Homebrew at runtime:
+
+- **Build:** Python framework + stdlib re-linked to bundle-relative paths;
+  GTK/VTE/gtk-vnc/spice/libosinfo/libvirt stack (bundled dylibs + typelibs);
+  `otool -L` verification of every rewritten reference; codesign re-sign;
+  zero `LEAK` lines.
+- **Launch (with Homebrew hidden):** `GTK version: 3.24.52`,
+  `conn=test:///default changed to state=Active`, `Showing manager`,
+  `SMOKE_RESULT: rc=0 alive_target=25s`.
+- **`grep /opt/homebrew bundle-smoke.log` → 0 matches** (asserted as a
+  failing step otherwise).
+- **Release asset:** `virt-manager-macos-arm64.zip` + `SHA256SUMS.txt` under
+  [Releases](https://github.com/jakepi-bot/virt-manager-macos/releases).
+
 ## Latest full run — 2026-10-15
 
 **Run [#38763193718](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38763193718): 4/4 jobs green.**
@@ -61,7 +80,8 @@ GitHub-hosted **arm64 (Apple Silicon)** macOS runners. Evidence artifacts
 | [#38761347110](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38761347110) | packaged ✅; from-source failed on a stale Homebrew index (python pin + `HOMEBREW_NO_AUTO_UPDATE`) |
 | [#38761930377](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38761930377) | packaged ✅ both OSes; from-source exposed the real master regression: `AttributeError: module 'locale' has no attribute 'bindtextdomain'` — upstream commit `d13271422` (after v5.1.0) |
 | [#38762754031](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38762754031) | `patches/0001` applied; next blocker: `ModuleNotFoundError: No module named 'requests'` (virtinst imports it at load; the brew formula ships it in its venv) |
-| [#38763193718](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38763193718) | **all green** |
+| [#38763193718](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38763193718) | **all green** (4/4) |
+| [#38766160372 → #38771163311](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38771163311) | **self-contained bundle debugging** (11 iterations): brew framework python layout (per-version `Resources`, `python` stub re-exec → exec the real interpreter), read-only brew trees, `otool -L` self-id mishandling, typelib allowlist gaps (`libxml2-2.0`, `GLibUnix-2.0`), brew framework `site-packages` symlink, baked Homebrew prefix (fixed by patching `buildconfig.py` for a relocatable prefix), and a smoke-test quoting bug that silently skipped the app launch (spaced `Virtual Machine Manager.app` path) |
 
 ## Known limitations (not covered by CI)
 

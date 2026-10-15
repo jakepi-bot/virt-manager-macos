@@ -34,7 +34,7 @@ stores connections between runs. SSH key auth is recommended.
 WHAT'S INSIDE
 -------------
 - virt-manager 5.1.0 (https://virt-manager.org, GPL-2.0-or-later)
-- Python 3.15 runtime, PyGObject, libvirt-python, requests
+- Python 3.14 runtime, PyGObject, libvirt-python, requests
 - GTK 3 (Quartz) stack, GtkSourceView, VTE, gtk-vnc, spice-gtk, libosinfo,
   libvirt, libvirt-glib and all their dependencies — copied out of Homebrew
   arm64 bottles and re-linked to live inside the bundle.

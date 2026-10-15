@@ -234,7 +234,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: virt-manager-macos-app
-          path: dist
+          path: .
 
       - name: Create release
         env:
@@ -244,4 +244,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "virt-manager $GITHUB_REF_NAME — self-contained macOS arm64 app" \
             --notes-file packaging/RELEASE_NOTES.md \
-            dist/virt-manager-macos-arm64.zip dist/SHA256SUMS.txt
+            dist/virt-manager-macos-arm64.zip SHA256SUMS.txt \
+          || gh release upload "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" --clobber \
+            dist/virt-manager-macos-arm64.zip SHA256SUMS.txt

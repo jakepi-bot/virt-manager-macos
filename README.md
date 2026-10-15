@@ -7,18 +7,20 @@ Upstream virt-manager does not officially support macOS, but the app runs
 natively on Apple Silicon today. This repo documents, scripts and *verifies*
 that path end-to-end on real arm64 macOS GitHub Actions runners.
 
-> **Status: verified 2026-10-15 — 4/4 CI jobs green on arm64 runners**
-> ([run](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38763193718)):
-> the Homebrew packaged app *and* upstream master from source both launch and
-> connect natively on macOS 15 Sequoia + macOS 26 Tahoe. Full evidence:
+> **Status: v1.0.0 released** — the self-contained Mac app is published under
+> [Releases](https://github.com/jakepi-bot/virt-manager-macos/releases), and CI
+> on arm64 runners (macOS 15 + macOS 26) verifies all three paths: Homebrew
+> packaged, upstream master from source, and the bundle launched **with
+> Homebrew hidden** (no runtime dependency on it). Full evidence:
 > [VERIFICATION.md](VERIFICATION.md).
 
 ## Download (prebuilt, nothing else needed)
 
-**[Releases →](https://github.com/jakepi-bot/virt-manager-macos/releases)** — a
-self-contained `Virtual Machine Manager.app` (arm64, macOS 15+): the whole
-GTK/Python stack lives inside the bundle. Unzip, drag to /Applications,
-right-click → Open the first time (it is ad-hoc signed, not notarized).
+**[Releases →](https://github.com/jakepi-bot/virt-manager-macos/releases/latest)** —
+grab `virt-manager-macos-arm64.zip`: a self-contained `Virtual Machine
+Manager.app` (arm64, macOS 15+), the whole GTK/Python stack inside the bundle.
+Unzip, drag to /Applications, right-click → Open the first time (ad-hoc
+signed, not notarized; see `README-FIRST.txt` inside the zip).
 
 ## Alternative: run it via Homebrew
 
@@ -61,7 +63,7 @@ not affected.
 | `scripts/macos-bundle.py` | Builds the **self-contained** `.app` (bundles Python, GTK and every dylib; no Homebrew at runtime) |
 | `packaging/` | Files shipped inside the release zip (README-FIRST, NOTICE) + release notes |
 | `patches/` | Patch applied to upstream master for macOS (see `patches/README.md`) |
-| `.github/workflows/verify-macos.yml` | CI: `packaged` + `from-source` jobs on `macos-15` / `macos-26` arm64 runners, incl. REA Mach-O inspection |
+| `.github/workflows/verify-macos.yml` | CI: `packaged` + `from-source` + self-contained-`.app` jobs on `macos-15` / `macos-26` arm64 runners, incl. REA Mach-O inspection; tag pushes publish the release |
 | `Brewfile` | Same deps as `install-deps-macos.sh`, for `brew bundle` |
 
 ## Notes and known limits
