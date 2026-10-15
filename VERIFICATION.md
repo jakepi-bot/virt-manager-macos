@@ -21,8 +21,12 @@ proving the app needs nothing from Homebrew at runtime:
   `SMOKE_RESULT: rc=0 alive_target=25s`.
 - **`grep /opt/homebrew bundle-smoke.log` → 0 matches** (asserted as a
   failing step otherwise).
-- **Release asset:** `virt-manager-macos-arm64.zip` + `SHA256SUMS.txt` under
-  [Releases](https://github.com/jakepi-bot/virt-manager-macos/releases).
+- **Published:** [v1.0.0](https://github.com/jakepi-bot/virt-manager-macos/releases/tag/v1.0.0)
+  — `virt-manager-macos-arm64.zip` (58 MB) + `SHA256SUMS.txt`; final tag run
+  [#38772754412](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38772754412)
+  (packaged ×2, from-source ×2, bundle, release — all green). Asset sha256
+  `35d155be7080563d1448cb053fcf88f0d8b6293776010ff68e83a0ffb9d9f43d`
+  (verified by downloading the published asset and re-hashing it).
 
 ## Latest full run — 2026-10-15
 
