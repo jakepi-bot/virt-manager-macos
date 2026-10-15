@@ -76,6 +76,14 @@ not affected.
   administration of Linux boxes via `qemu+ssh://…`. Local VMs are possible via
   libvirt + QEMU's `hvf` accelerator (see <https://libvirt.org/macos.html>),
   but that's outside this repo's scope.
+- **If an action does nothing,** the app is writing a log when it was launched
+  from Finder/Dock:
+
+      ~/Library/Logs/virt-manager-macos.log
+
+  For live output run it from Terminal instead:
+
+      "/Applications/Virtual Machine Manager.app/Contents/MacOS/launcher" --no-fork --debug
 - **libguestfs VM inspection** is unavailable on macOS (the feature degrades).
 - **System tray icon** is unavailable (requires Ayatana AppIndicator; degrades).
 - **Historical macOS crash (virt-manager ≤ 4.x / issue #620):** fixed upstream

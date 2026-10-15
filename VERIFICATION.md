@@ -21,12 +21,17 @@ proving the app needs nothing from Homebrew at runtime:
   `SMOKE_RESULT: rc=0 alive_target=25s`.
 - **`grep /opt/homebrew bundle-smoke.log` → 0 matches** (asserted as a
   failing step otherwise).
-- **Published:** [v1.0.0](https://github.com/jakepi-bot/virt-manager-macos/releases/tag/v1.0.0)
-  — `virt-manager-macos-arm64.zip` (58 MB) + `SHA256SUMS.txt`; final tag run
-  [#38772754412](https://github.com/jakepi-bot/virt-manager-macos/actions/runs/38772754412)
-  (packaged ×2, from-source ×2, bundle, release — all green). Asset sha256
-  `35d155be7080563d1448cb053fcf88f0d8b6293776010ff68e83a0ffb9d9f43d`
+- **Published:** [v1.0.1](https://github.com/jakepi-bot/virt-manager-macos/releases/tag/v1.0.1)
+  — `virt-manager-macos-arm64.zip` + `SHA256SUMS.txt`; asset sha256
+  `8604274279cfdea81203372318e71790ff3e64f67b416581366a404f4e7a2f82`
   (verified by downloading the published asset and re-hashing it).
+- **CI also exercises, inside the bundle with Homebrew hidden:**
+  - `launcher --selfcheck` → `GTK 3.24.52` and every console binding:
+    GtkSource, Vte, GVnc, GtkVnc, SpiceClientGLib/Gtk, Libosinfo, libvirt
+  - `--show-domain-editor test` — the same code path as the manager's **Open**
+    button (VM window + console backends) → `SMOKE_RESULT: rc=0`
+  - the app icon: `virt-manager.icns` (313 KB) built by the bundler and
+    referenced from `CFBundleIconFile`
 
 ## Latest full run — 2026-10-15
 
